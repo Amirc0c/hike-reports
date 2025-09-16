@@ -11,25 +11,28 @@ import (
 
 // Report — модель для JSON
 type Group struct {
-    Number   string `json:"number"`
-    Name     string `json:"name"`
-    Telegram string `json:"telegram"`
+	Number   string `json:"number"`
+	Name     string `json:"name"`
+	Telegram string `json:"telegram"`
 }
 
+// Точка маршрута
 type Checkpoint struct {
-    Name string `json:"name"`
-    Time string `json:"time"`
+	Name string `json:"name"`
+	Time string `json:"time"`
 }
 
+// Отчёт
 type Report struct {
-    ID            int64        `json:"id"`
-    RouteName     string       `json:"route_name"`
-    GpxFile       string       `json:"gpx_file"`
-    Checkpoints   []Checkpoint `json:"checkpoints"`
-    MustContactBy string       `json:"must_contact_by"`
-    Status        string       `json:"status"`
-    Grp           Group        `json:"grp"`
+	ID            int64        `json:"id"`
+	RouteName     string       `json:"route_name"`
+	GpxFile       string       `json:"gpx_file"`
+	Checkpoints   []Checkpoint `json:"checkpoints"`
+	MustContactBy string       `json:"must_contact_by"`
+	Status        string       `json:"status"`
+	Grp           Group        `json:"grp"`
 }
+
 
 
 // CREATE
@@ -86,10 +89,10 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var reports []models.Report
+	var reports []Report
 
 	for rows.Next() {
-		var report models.Report
+		var report Report
 		var checkpointsBytes []byte
 		var grpBytes []byte
 
@@ -97,7 +100,7 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 			&report.ID,
 			&report.RouteName,
 			&report.GpxFile,
-			&checkpointsBytes, // сначала []byte
+			&checkpointsBytes,
 			&report.MustContactBy,
 			&report.Status,
 			&grpBytes,
@@ -107,15 +110,9 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// распарсим JSON в Go-структуру
-		if err := json.Unmarshal(checkpointsBytes, &report.Checkpoints); err != nil {
-			http.Error(w, "JSON unmarshal checkpoints error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := json.Unmarshal(grpBytes, &report.Grp); err != nil {
-			http.Error(w, "JSON unmarshal grp error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		// распарсим JSONB
+		json.Unmarshal(checkpointsBytes, &report.Checkpoints)
+		json.Unmarshal(grpBytes, &report.Grp)
 
 		reports = append(reports, report)
 	}
@@ -123,6 +120,7 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(reports)
 }
+
 
 // UPDATE
 func UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
