@@ -79,22 +79,47 @@ func CreateReport(w http.ResponseWriter, r *http.Request) {
 
 // READ (all)
 func GetReports(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.DB.Query(`SELECT id, route_name, gpx_file, checkpoints, must_contact_by, grp FROM reports`)
+	rows, err := db.DB.Query(`SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp FROM reports`)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "DB query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var reports []Report
+	var reports []models.Report
+
 	for rows.Next() {
-		var rep Report
-		if err := rows.Scan(&rep.ID, &rep.RouteName, &rep.GpxFile, &rep.Checkpoints, &rep.MustContactBy, &rep.Grp); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		var report models.Report
+		var checkpointsBytes []byte
+		var grpBytes []byte
+
+		err := rows.Scan(
+			&report.ID,
+			&report.RouteName,
+			&report.GpxFile,
+			&checkpointsBytes, // сначала []byte
+			&report.MustContactBy,
+			&report.Status,
+			&grpBytes,
+		)
+		if err != nil {
+			http.Error(w, "Scan error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		reports = append(reports, rep)
+
+		// распарсим JSON в Go-структуру
+		if err := json.Unmarshal(checkpointsBytes, &report.Checkpoints); err != nil {
+			http.Error(w, "JSON unmarshal checkpoints error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := json.Unmarshal(grpBytes, &report.Grp); err != nil {
+			http.Error(w, "JSON unmarshal grp error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		reports = append(reports, report)
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(reports)
 }
