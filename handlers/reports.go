@@ -106,14 +106,51 @@ func DeleteReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Удаляем отчёт
 	_, err = db.DB.Exec("DELETE FROM reports WHERE id=$1", id)
 	if err != nil {
 		http.Error(w, "DB delete error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	// Получаем оставшиеся отчёты
+	rows, err := db.DB.Query(`SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp FROM reports`)
+	if err != nil {
+		http.Error(w, "DB query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var reports []Report
+	for rows.Next() {
+		var report Report
+		var checkpointsBytes []byte
+		var grpBytes []byte
+
+		if err := rows.Scan(
+			&report.ID,
+			&report.RouteName,
+			&report.GpxFile,
+			&checkpointsBytes,
+			&report.MustContactBy,
+			&report.Status,
+			&grpBytes,
+		); err != nil {
+			http.Error(w, "Scan error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		json.Unmarshal(checkpointsBytes, &report.Checkpoints)
+		json.Unmarshal(grpBytes, &report.Grp)
+
+		reports = append(reports, report)
+	}
+
+	// Возвращаем оставшиеся отчёты
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reports)
 }
+
 
 // UPDATE STATUS
 func UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
