@@ -5,69 +5,47 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 	"backend/db"
+	"github.com/gorilla/mux"
 )
 
-// Report — модель для JSON
-type Group struct {
-	Number   string `json:"number"`
-	Name     string `json:"name"`
-	Telegram string `json:"telegram"`
-}
-
-// Точка маршрута
+// Структуры
 type Checkpoint struct {
 	Name string `json:"name"`
 	Time string `json:"time"`
 }
 
-// Отчёт
-type Report struct {
-	ID            int64        `json:"id"`
-	RouteName     string       `json:"route_name"`
-	GpxFile       string       `json:"gpx_file"`
-	Checkpoints   []Checkpoint `json:"checkpoints"`
-	MustContactBy string       `json:"must_contact_by"`
-	Status        string       `json:"status"`
-	Grp           Group        `json:"grp"`
+type GroupMember struct {
+	Number   string `json:"number"`
+	Name     string `json:"name"`
+	Telegram string `json:"telegram"`
 }
 
-
+type Report struct {
+	ID            int64         `json:"id"`
+	RouteName     string        `json:"route_name"`
+	GpxFile       string        `json:"gpx_file"`
+	Checkpoints   []Checkpoint  `json:"checkpoints"`
+	MustContactBy string        `json:"must_contact_by"`
+	Status        string        `json:"status"`
+	Grp           []GroupMember `json:"grp"`
+}
 
 // CREATE
 func CreateReport(w http.ResponseWriter, r *http.Request) {
 	var report Report
-
-	// парсим JSON из тела запроса
 	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
-		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// маршалим grp и checkpoints в JSON для сохранения в Postgres
-	grpBytes, err := json.Marshal(report.Grp)
-	if err != nil {
-		http.Error(w, "Error encoding grp: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	checkpointsJSON, _ := json.Marshal(report.Checkpoints)
+	grpJSON, _ := json.Marshal(report.Grp)
 
-	checkpointsBytes, err := json.Marshal(report.Checkpoints)
-	if err != nil {
-		http.Error(w, "Error encoding checkpoints: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// вставляем запись
-	err = db.DB.QueryRow(
-		`INSERT INTO reports (route_name, gpx_file, checkpoints, must_contact_by, status, grp) 
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		report.RouteName,
-		report.GpxFile,
-		checkpointsBytes,
-		report.MustContactBy,
-		report.Status,
-		grpBytes,
+	err := db.DB.QueryRow(
+		`INSERT INTO reports (route_name, gpx_file, checkpoints, must_contact_by, status, grp)
+		 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+		report.RouteName, report.GpxFile, checkpointsJSON, report.MustContactBy, report.Status, grpJSON,
 	).Scan(&report.ID)
 
 	if err != nil {
@@ -75,12 +53,12 @@ func CreateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ответ в JSON
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(report)
 }
 
-// READ (all)
+// READ
 func GetReports(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.DB.Query(`SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp FROM reports`)
 	if err != nil {
@@ -96,7 +74,7 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 		var checkpointsBytes []byte
 		var grpBytes []byte
 
-		err := rows.Scan(
+		if err := rows.Scan(
 			&report.ID,
 			&report.RouteName,
 			&report.GpxFile,
@@ -104,13 +82,11 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 			&report.MustContactBy,
 			&report.Status,
 			&grpBytes,
-		)
-		if err != nil {
+		); err != nil {
 			http.Error(w, "Scan error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		// распарсим JSONB
 		json.Unmarshal(checkpointsBytes, &report.Checkpoints)
 		json.Unmarshal(grpBytes, &report.Grp)
 
@@ -121,52 +97,50 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(reports)
 }
 
-
-// UPDATE
-func UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
-    vars := mux.Vars(r)
-    idStr := vars["id"]
-
-    id, err := strconv.Atoi(idStr)
-    if err != nil {
-        http.Error(w, "Invalid ID", http.StatusBadRequest)
-        return
-    }
-
-    var input struct {
-        Status string `json:"status"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-        http.Error(w, "Invalid request body", http.StatusBadRequest)
-        return
-    }
-
-    _, err = db.DB.Exec("UPDATE reports SET status = $1 WHERE id = $2", input.Status, id)
-    if err != nil {
-        http.Error(w, "DB update error: "+err.Error(), http.StatusInternalServerError)
-        return
-    }
-
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte("Status updated successfully"))
-}
-
-
 // DELETE
 func DeleteReport(w http.ResponseWriter, r *http.Request) {
 	idStr := mux.Vars(r)["id"]
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
-	_, err = db.DB.Exec(`DELETE FROM reports WHERE id=$1`, id)
+	_, err = db.DB.Exec("DELETE FROM reports WHERE id=$1", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "DB delete error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
+// UPDATE STATUS
+func UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.DB.Exec("UPDATE reports SET status=$1 WHERE id=$2", payload.Status, id)
+	if err != nil {
+		http.Error(w, "DB update error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":     id,
+		"status": payload.Status,
+	})
+}
