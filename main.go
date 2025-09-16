@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-
+"fmt"
 	"github.com/gorilla/mux"
 	"backend/db"
 	"backend/handlers"
@@ -44,7 +44,7 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-
+fmt.Println("работай")
 	log.Println("Server running on :" + port)
 	// оборачиваем mux в CORS middleware
 	http.ListenAndServe(":"+port, withCORS(r))
