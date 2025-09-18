@@ -28,7 +28,7 @@ func main() {
 	r.GET("/reports", handlers.GetReports)
 	r.GET("/reports/:id", handlers.GetReport)
 	r.POST("/reports", handlers.CreateReport)
-	r.PATCH("/reports/:id/status", handlers.UpdateReportStatus)
+	r.PATCH("/reports/:id", handlers.UpdateReportStatus)
 	r.DELETE("/reports/:id", handlers.DeleteReport)
 
 	// Запуск сервера
