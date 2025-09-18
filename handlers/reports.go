@@ -34,18 +34,41 @@ type Report struct {
 // CREATE
 func CreateReport(w http.ResponseWriter, r *http.Request) {
 	var report Report
+
+	// парсим JSON из тела запроса
 	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
-		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	checkpointsJSON, _ := json.Marshal(report.Checkpoints)
-	grpJSON, _ := json.Marshal(report.Grp)
+	// если статус пустой → ставим active
+	if report.Status == "" {
+		report.Status = "active"
+	}
 
-	err := db.DB.QueryRow(
-		`INSERT INTO reports (route_name, gpx_file, checkpoints, must_contact_by, status, grp)
-		 VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-		report.RouteName, report.GpxFile, checkpointsJSON, report.MustContactBy, report.Status, grpJSON,
+	// маршалим grp и checkpoints
+	grpBytes, err := json.Marshal(report.Grp)
+	if err != nil {
+		http.Error(w, "Error encoding grp: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	checkpointsBytes, err := json.Marshal(report.Checkpoints)
+	if err != nil {
+		http.Error(w, "Error encoding checkpoints: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// вставляем запись
+	err = db.DB.QueryRow(
+		`INSERT INTO reports (route_name, gpx_file, checkpoints, must_contact_by, status, grp) 
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		report.RouteName,
+		report.GpxFile,
+		checkpointsBytes,
+		report.MustContactBy,
+		report.Status,
+		grpBytes,
 	).Scan(&report.ID)
 
 	if err != nil {
@@ -53,10 +76,11 @@ func CreateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ответ
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(report)
 }
+
 
 // READ
 func GetReports(w http.ResponseWriter, r *http.Request) {
