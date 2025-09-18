@@ -1,33 +1,40 @@
 package main
 
 import (
-	"time"
+	"log"
+	"os"
+
+	"backend/db"
+	"backend/handlers"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-"fmt"
-	"backend/handlers"
 )
 
 func main() {
+	// Подключение к БД
+	db.Connect()
+
+	// Создаём роутер Gin
 	r := gin.Default()
 
-	// ✅ Настройка CORS
-	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "https://твойфронт.vercel.app"}, // замени на свой фронт
-		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
-fmt.Println("кал")
-	// ✅ Роуты
-	r.GET("/reports", handlers.GetReports)             // получить все отчёты
-	r.GET("/reports/:id", handlers.GetReport)          // получить один отчёт
-	r.POST("/reports", handlers.CreateReport)          // создать отчёт
-	r.PATCH("/reports/:id/status", handlers.UpdateStatus) // обновить статус и вернуть отчёт
+	// Включаем CORS
+	r.Use(cors.Default())
 
-	// ✅ Запуск сервера
-	r.Run(":8080")
+	// Роуты
+	r.GET("/reports", handlers.GetReports)
+	r.GET("/reports/:id", handlers.GetReport)
+	r.POST("/reports", handlers.CreateReport)
+	r.PATCH("/reports/:id/status", handlers.UpdateStatus)
+
+	// Порт (Render передаёт через PORT)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// Запускаем сервер
+	if err := r.Run(":" + port); err != nil {
+		log.Fatal(err)
+	}
 }
