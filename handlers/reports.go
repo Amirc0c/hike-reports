@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
- "database/sql"
 
 	"backend/db"
 	"github.com/gorilla/mux"
@@ -84,101 +83,55 @@ func CreateReport(w http.ResponseWriter, r *http.Request) {
 
 
 // READ
-func GetReport(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	row := db.DB.QueryRow(`
+func GetReports(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.DB.Query(`
 		SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp
 		FROM reports
-		WHERE id=$1
-	`, id)
-
-	var report Report
-	var checkpointsJSON, grpJSON []byte
-
-	err = row.Scan(
-		&report.ID,
-		&report.RouteName,
-		&report.GpxFile,
-		&checkpointsJSON,
-		&report.MustContactBy,
-		&report.Status,
-		&grpJSON,
-	)
+		ORDER BY id DESC
+	`)
 	if err != nil {
-		http.Error(w, "Report not found", http.StatusNotFound)
+		http.Error(w, "DB query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 
-	// декодируем JSON-поля
-	if err := json.Unmarshal(checkpointsJSON, &report.Checkpoints); err != nil {
-		http.Error(w, "Error decoding checkpoints: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	var reports []Report
 
-	if err := json.Unmarshal(grpJSON, &report.Grp); err != nil {
-		http.Error(w, "Error decoding grp: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	for rows.Next() {
+		var report Report
+		var checkpointsJSON, grpJSON []byte
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(report)
-}
-
-
-func GetReport(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
-	row := db.DB.QueryRow(`
-		SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp
-		FROM reports
-		WHERE id=$1
-	`, id)
-
-	var report Report
-	var checkpointsJSON, grpJSON []byte
-
-	err = row.Scan(
-		&report.ID,
-		&report.RouteName,
-		&report.GpxFile,
-		&checkpointsJSON,
-		&report.MustContactBy,
-		&report.Status,
-		&grpJSON,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "DB query error: "+err.Error(), http.StatusInternalServerError)
+		err := rows.Scan(
+			&report.ID,
+			&report.RouteName,
+			&report.GpxFile,
+			&checkpointsJSON,
+			&report.MustContactBy,
+			&report.Status,
+			&grpJSON,
+		)
+		if err != nil {
+			http.Error(w, "Scan error: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
-		return
-	}
 
-	if err := json.Unmarshal(checkpointsJSON, &report.Checkpoints); err != nil {
-		http.Error(w, "Error decoding checkpoints: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+		if err := json.Unmarshal(checkpointsJSON, &report.Checkpoints); err != nil {
+			http.Error(w, "Error decoding checkpoints: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	if err := json.Unmarshal(grpJSON, &report.Grp); err != nil {
-		http.Error(w, "Error decoding grp: "+err.Error(), http.StatusInternalServerError)
-		return
+		if err := json.Unmarshal(grpJSON, &report.Grp); err != nil {
+			http.Error(w, "Error decoding grp: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		reports = append(reports, report)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(report)
+	json.NewEncoder(w).Encode(reports)
 }
+
 
 
 // DELETE
