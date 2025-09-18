@@ -1,52 +1,33 @@
 package main
 
 import (
-	"log"
-	"net/http"
-	"os"
-"fmt"
-	"github.com/gorilla/mux"
-	"backend/db"
+	"time"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+
 	"backend/handlers"
 )
 
-// CORS middleware
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func initializeRouter() *mux.Router {
-	r := mux.NewRouter()
-	r.HandleFunc("/reports", handlers.CreateReport).Methods("POST")
-	r.HandleFunc("/reports", handlers.GetReports).Methods("GET")
-	r.HandleFunc("/reports/{id}", handlers.DeleteReport).Methods("DELETE")
-	r.HandleFunc("/reports/{id}/status", handlers.UpdateReportStatus).Methods("PATCH")
-
-	return r
-}
-
 func main() {
-	db.InitDB() // подключаем БД
+	r := gin.Default()
 
-	r := initializeRouter()
+	// ✅ Настройка CORS
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000", "https://твойфронт.vercel.app"}, // замени на свой фронт
+		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-fmt.Println("работай")
-	log.Println("Server running on :" + port)
-	// оборачиваем mux в CORS middleware
-	http.ListenAndServe(":"+port, withCORS(r))
+	// ✅ Роуты
+	r.GET("/reports", handlers.GetReports)             // получить все отчёты
+	r.GET("/reports/:id", handlers.GetReport)          // получить один отчёт
+	r.POST("/reports", handlers.CreateReport)          // создать отчёт
+	r.PATCH("/reports/:id/status", handlers.UpdateStatus) // обновить статус и вернуть отчёт
+
+	// ✅ Запуск сервера
+	r.Run(":8080")
 }
