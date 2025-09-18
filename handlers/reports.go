@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+ "database/sql"
 
 	"backend/db"
 	"github.com/gorilla/mux"
