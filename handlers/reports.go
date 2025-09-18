@@ -20,7 +20,7 @@ type GroupMember struct {
 	Name     string `json:"name"`
 	Telegram string `json:"telegram"`
 }
-
+// я срал посчему деплойка сломаласб
 type Report struct {
 	ID            int64         `json:"id"`
 	RouteName     string        `json:"route_name"`
@@ -60,7 +60,11 @@ func CreateReport(w http.ResponseWriter, r *http.Request) {
 
 // READ
 func GetReports(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.DB.Query(`SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp FROM reports`)
+	rows, err := db.DB.Query(`
+		SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp
+		FROM reports
+		ORDER BY id DESC
+	`)
 	if err != nil {
 		http.Error(w, "DB query error: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -71,24 +75,31 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var report Report
-		var checkpointsBytes []byte
-		var grpBytes []byte
+		var checkpointsJSON, grpJSON []byte
 
-		if err := rows.Scan(
+		err := rows.Scan(
 			&report.ID,
 			&report.RouteName,
 			&report.GpxFile,
-			&checkpointsBytes,
+			&checkpointsJSON,
 			&report.MustContactBy,
 			&report.Status,
-			&grpBytes,
-		); err != nil {
+			&grpJSON,
+		)
+		if err != nil {
 			http.Error(w, "Scan error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		json.Unmarshal(checkpointsBytes, &report.Checkpoints)
-		json.Unmarshal(grpBytes, &report.Grp)
+		if err := json.Unmarshal(checkpointsJSON, &report.Checkpoints); err != nil {
+			http.Error(w, "Error decoding checkpoints: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := json.Unmarshal(grpJSON, &report.Grp); err != nil {
+			http.Error(w, "Error decoding grp: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		reports = append(reports, report)
 	}
@@ -96,6 +107,56 @@ func GetReports(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(reports)
 }
+
+func GetReport(w http.ResponseWriter, r *http.Request) {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	row := db.DB.QueryRow(`
+		SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp
+		FROM reports
+		WHERE id=$1
+	`, id)
+
+	var report Report
+	var checkpointsJSON, grpJSON []byte
+
+	err = row.Scan(
+		&report.ID,
+		&report.RouteName,
+		&report.GpxFile,
+		&checkpointsJSON,
+		&report.MustContactBy,
+		&report.Status,
+		&grpJSON,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "DB query error: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if err := json.Unmarshal(checkpointsJSON, &report.Checkpoints); err != nil {
+		http.Error(w, "Error decoding checkpoints: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.Unmarshal(grpJSON, &report.Grp); err != nil {
+		http.Error(w, "Error decoding grp: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
 
 // DELETE
 func DeleteReport(w http.ResponseWriter, r *http.Request) {
