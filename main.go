@@ -31,7 +31,8 @@ func initializeRouter() *mux.Router {
 	r.HandleFunc("/reports", handlers.CreateReport).Methods("POST")
 	r.HandleFunc("/reports", handlers.GetReports).Methods("GET")
 	r.HandleFunc("/reports/{id}", handlers.DeleteReport).Methods("DELETE")
-	r.HandleFunc("/reports/{id}/status", handlers.UpdateReportStatus).Methods("PUT")
+	r.HandleFunc("/reports/{id}/status", handlers.UpdateReportStatus).Methods("PATCH")
+
 	return r
 }
 

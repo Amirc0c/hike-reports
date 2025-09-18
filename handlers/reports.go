@@ -238,6 +238,7 @@ func DeleteReport(w http.ResponseWriter, r *http.Request) {
 
 
 // UPDATE STATUS
+// UPDATE STATUS (PATCH)
 func UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
@@ -254,15 +255,39 @@ func UpdateReportStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// обновляем статус
 	_, err = db.DB.Exec("UPDATE reports SET status=$1 WHERE id=$2", payload.Status, id)
 	if err != nil {
 		http.Error(w, "DB update error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// получаем обновлённый отчёт
+	var report Report
+	var checkpointsBytes []byte
+	var grpBytes []byte
+
+	err = db.DB.QueryRow(
+		`SELECT id, route_name, gpx_file, checkpoints, must_contact_by, status, grp 
+		 FROM reports WHERE id=$1`, id,
+	).Scan(
+		&report.ID,
+		&report.RouteName,
+		&report.GpxFile,
+		&checkpointsBytes,
+		&report.MustContactBy,
+		&report.Status,
+		&grpBytes,
+	)
+	if err != nil {
+		http.Error(w, "DB fetch error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.Unmarshal(checkpointsBytes, &report.Checkpoints)
+	json.Unmarshal(grpBytes, &report.Grp)
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":     id,
-		"status": payload.Status,
-	})
+	json.NewEncoder(w).Encode(report)
 }
