@@ -2,11 +2,9 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 
-	"backend/db"
-	"backend/models"
-
+	"github.com/Amirc0c/hike-reports/db"
+	"github.com/Amirc0c/hike-reports/models"
 	"github.com/gin-gonic/gin"
 )
 
@@ -35,13 +33,11 @@ func GetReport(c *gin.Context) {
 func CreateReport(c *gin.Context) {
 	var report models.Report
 
-	// Привязываем JSON к модели
 	if err := c.ShouldBindJSON(&report); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Статус по умолчанию
 	if report.Status == "" {
 		report.Status = "active"
 	}
@@ -59,7 +55,6 @@ func UpdateStatus(c *gin.Context) {
 	id := c.Param("id")
 	var report models.Report
 
-	// Проверяем существует ли отчёт
 	if err := db.DB.First(&report, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Отчет не найден"})
 		return
@@ -80,6 +75,5 @@ func UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	// Возвращаем сразу обновлённый отчёт
 	c.JSON(http.StatusOK, report)
 }
