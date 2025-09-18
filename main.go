@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
+"fmt"
 	"backend/handlers"
 )
 
@@ -21,7 +21,7 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-
+fmt.Println("кал")
 	// ✅ Роуты
 	r.GET("/reports", handlers.GetReports)             // получить все отчёты
 	r.GET("/reports/:id", handlers.GetReport)          // получить один отчёт
